@@ -57,12 +57,14 @@ This repository provides a comprehensive solution for creating and managing prod
 - **Monitoring**: Prometheus, Grafana, CloudWatch
 
 ### Add-ons Included
-- AWS Load Balancer Controller
-- Cluster Autoscaler
-- External DNS
-- Cert Manager
-- Monitoring Stack (Prometheus/Grafana)
-- NGINX Ingress Controller
+- **AWS Load Balancer Controller** - Manages AWS ALB/NLB for ingress
+- **Cluster Autoscaler** - Automatically scales node groups
+- **External DNS** - Automatic DNS record management
+- **Cert Manager** - Automated SSL/TLS certificate management
+- **Monitoring Stack** - Prometheus, Grafana, and CloudWatch
+- **NGINX Ingress Controller** - HTTP/HTTPS ingress controller
+
+*All add-ons are modular and can be installed independently*
 
 ## 📁 Project Structure
 
@@ -74,7 +76,6 @@ eks-cloudformation/
 ├── scripts/                 # Management scripts
 │   ├── create-cluster.sh
 │   ├── delete-cluster.sh
-│   ├── install-addons.sh
 │   └── run-docker.sh
 ├── Dockerfile              # Container with all tools
 ├── docker-compose.yml      # Container orchestration
@@ -109,7 +110,17 @@ make dev-shell
 make status
 make nodes
 make pods
-make install-addons
+
+# GitOps deployment (recommended)
+make gitops-bootstrap-dev         # Development environment
+make gitops-bootstrap-staging     # Staging environment
+make gitops-bootstrap-prod        # Production environment
+
+# Monitor GitOps
+make gitops-status-dev           # Check dev applications
+make gitops-status-staging       # Check staging applications
+make gitops-status-prod          # Check production applications
+make argocd-ui                   # Access ArgoCD dashboard
 
 # Monitoring
 make monitoring  # Access Grafana dashboard
@@ -137,8 +148,8 @@ docker build -t eks-cluster-manager .
 # Create development cluster
 ./scripts/create-cluster.sh --environment dev
 
-# Install add-ons
-./scripts/install-addons.sh --cluster-name dev-eks
+# Install add-ons using GitOps
+make gitops-bootstrap-dev
 
 # Delete cluster
 ./scripts/delete-cluster.sh --environment dev --cluster-name dev-eks
@@ -195,6 +206,110 @@ make monitoring
 ### Horizontal Pod Autoscaler
 - Scales pods based on CPU/memory metrics
 - Custom metrics support
+
+## 🔧 Add-on Management
+
+All EKS add-ons are now managed through GitOps for consistency, reliability, and best practices. The GitOps approach provides:
+
+- **Declarative configuration**: Define desired state in Git
+- **Automatic synchronization**: Changes applied automatically
+- **Environment consistency**: Same deployment method across dev/staging/production
+- **Version control**: All changes tracked in Git
+- **Easy rollbacks**: Git-based rollback capabilities
+
+### Installing Add-ons
+
+```bash
+# Deploy to specific environments using GitOps
+make gitops-bootstrap-dev         # Development environment
+make gitops-bootstrap-staging     # Staging environment  
+make gitops-bootstrap-prod        # Production environment
+
+# Monitor deployment status
+make gitops-status-dev           # Check dev status
+make gitops-status-staging       # Check staging status
+make gitops-status-prod          # Check production status
+```
+
+### Environment-Specific Configurations
+
+- **Development**: Optimized for cost and speed (smaller resources, faster scaling)
+- **Staging**: Production-like validation environment (moderate resources)
+- **Production**: Full enterprise-grade configuration (high availability, full resources)
+
+### Included Add-ons
+
+All environments include the same core add-ons with environment-appropriate sizing:
+
+- **AWS Load Balancer Controller** - ALB/NLB management
+- **Cluster Autoscaler** - Node auto-scaling
+- **Monitoring Stack** - Prometheus + Grafana
+- **NGINX Ingress** - Ingress controller
+- **External DNS** - Route53 DNS management
+- **Cert Manager** - SSL/TLS certificates
+
+## 🔄 GitOps with ArgoCD (Recommended for Production)
+
+For production environments, we recommend using GitOps with ArgoCD instead of shell scripts. This provides:
+
+- **Declarative management**: Define desired state in Git
+- **Automatic synchronization**: Changes are automatically applied
+- **Self-healing**: Automatically fixes configuration drift
+- **Rollback capabilities**: Easy to revert to previous versions
+- **Audit trail**: All changes tracked in Git history
+
+### Quick Start with GitOps
+
+```bash
+# 1. Bootstrap ArgoCD and all applications
+make gitops-bootstrap
+
+# 2. Access ArgoCD UI
+make argocd-password  # Get admin password
+make argocd-ui       # Start port-forward to UI
+
+# 3. Monitor applications
+make gitops-status   # Check all applications
+make argocd-apps     # List ArgoCD applications
+```
+
+### GitOps vs Shell Scripts
+
+| Feature | Shell Scripts | GitOps with ArgoCD |
+|---------|---------------|-------------------|
+| **Deployment** | Imperative | Declarative |
+| **State Management** | Manual | Automatic |
+| **Rollback** | Manual | Git-based |
+| **Audit Trail** | Limited | Complete |
+| **Multi-Environment** | Script copies | Git branches |
+| **Collaboration** | Complex | Git workflow |
+| **Self-Healing** | None | Automatic |
+| **UI/Dashboard** | None | Built-in |
+
+### Migration Path
+
+```bash
+# Remove existing shell script installations (if any)
+helm uninstall aws-load-balancer-controller -n kube-system
+helm uninstall cluster-autoscaler -n kube-system
+
+# Bootstrap GitOps
+make gitops-bootstrap
+
+# Monitor transition
+make gitops-status
+```
+
+### GitOps Applications Included
+
+- **AWS Load Balancer Controller** - ALB/NLB management
+- **Cluster Autoscaler** - Node auto-scaling
+- **Monitoring Stack** - Prometheus + Grafana
+- **NGINX Ingress** - Ingress controller
+- **External DNS** - Route53 DNS management
+- **Cert Manager** - SSL/TLS certificates
+
+For detailed GitOps documentation, see [`gitops/README.md`](gitops/README.md).
 
 ## 📚 Configuration
 
@@ -263,9 +378,10 @@ Edit `cluster-config/production-cluster.yaml` for:
 3. Update scripts to support new environment
 
 ### Custom Add-ons
-1. Modify `scripts/install-addons.sh`
-2. Add Helm charts or kubectl manifests
-3. Update configuration files
+1. Add new ArgoCD Application to `gitops/applications/`
+2. Create environment-specific patches in `gitops/environments/*/patches/`
+3. Update Helm values in Application manifests
+4. Commit changes to Git for automatic deployment
 
 ## 📖 Additional Resources
 

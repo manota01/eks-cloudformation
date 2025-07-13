@@ -1,0 +1,250 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: monitoring
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 56.8.0
+    helm:
+      releaseName: kube-prometheus-stack
+      values: |
+        nameOverride: ""
+        fullnameOverride: ""
+        
+        crds:
+          enabled: true
+        
+        global:
+          rbac:
+            create: true
+            pspEnabled: false
+        
+        alertmanager:
+          enabled: true
+          serviceAccount:
+            create: true
+            name: alertmanager
+          ingress:
+            enabled: false
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+            resources:
+              limits:
+                cpu: 200m
+                memory: 512Mi
+              requests:
+                cpu: 100m
+                memory: 256Mi
+        
+        grafana:
+          enabled: true
+          serviceAccount:
+            create: true
+            name: grafana
+          admin:
+            existingSecret: ""
+            userKey: admin-user
+            passwordKey: admin-password
+          persistence:
+            enabled: true
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            size: 10Gi
+          ingress:
+            enabled: false
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+              - name: 'default'
+                orgId: 1
+                folder: ''
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/default
+          dashboards:
+            default:
+              kubernetes-cluster-monitoring:
+                gnetId: 7249
+                revision: 1
+                datasource: Prometheus
+              kubernetes-pod-monitoring:
+                gnetId: 6417
+                revision: 1
+                datasource: Prometheus
+              node-exporter:
+                gnetId: 1860
+                revision: 27
+                datasource: Prometheus
+        
+        kubeApiServer:
+          enabled: true
+        
+        kubelet:
+          enabled: true
+          serviceMonitor:
+            metricRelabelings:
+              - sourceLabels: [__name__]
+                regex: (container_tasks_state|container_memory_failures_total)
+                action: drop
+        
+        kubeControllerManager:
+          enabled: true
+        
+        coreDns:
+          enabled: true
+        
+        kubeEtcd:
+          enabled: true
+        
+        kubeScheduler:
+          enabled: true
+        
+        kubeProxy:
+          enabled: true
+        
+        kubeStateMetrics:
+          enabled: true
+        
+        kube-state-metrics:
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+        
+        nodeExporter:
+          enabled: true
+        
+        prometheus-node-exporter:
+          resources:
+            limits:
+              cpu: 200m
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+        
+        prometheusOperator:
+          enabled: true
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+        
+        prometheus:
+          enabled: true
+          serviceAccount:
+            create: true
+            name: prometheus
+          ingress:
+            enabled: false
+          prometheusSpec:
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 50Gi
+            resources:
+              limits:
+                cpu: 500m
+                memory: 2Gi
+              requests:
+                cpu: 200m
+                memory: 1Gi
+            retention: 30d
+            retentionSize: 45GB
+            replicas: 1
+            shards: 1
+            logLevel: info
+            logFormat: logfmt
+            routePrefix: /
+            externalUrl: ""
+            paused: false
+            image:
+              repository: quay.io/prometheus/prometheus
+              tag: v2.48.0
+            tolerations: []
+            topologySpreadConstraints: []
+            affinity: {}
+            securityContext:
+              runAsGroup: 2000
+              runAsNonRoot: true
+              runAsUser: 1000
+              fsGroup: 2000
+            ruleNamespaceSelector:
+              matchNames:
+              - kube-system
+              - monitoring
+              - default
+            ruleSelector:
+              matchLabels:
+                prometheus: kube-prometheus
+                role: alert-rules
+            serviceMonitorNamespaceSelector:
+              matchNames:
+              - kube-system
+              - monitoring
+              - default
+            serviceMonitorSelector:
+              matchLabels:
+                prometheus: kube-prometheus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - Replace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/template/spec/containers/0/image
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+    - /spec/template/spec/containers/0/image 

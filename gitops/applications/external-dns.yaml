@@ -1,0 +1,139 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: external-dns
+    app.kubernetes.io/component: dns
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns
+    chart: external-dns
+    targetRevision: 1.14.3
+    helm:
+      releaseName: external-dns
+      values: |
+        image:
+          repository: registry.k8s.io/external-dns/external-dns
+          tag: v0.14.0
+        
+        sources:
+          - service
+          - ingress
+        
+        provider: aws
+        
+        aws:
+          region: ap-southeast-2
+          zoneType: public
+          assumeRoleArn: ""
+          batchChangeSize: 1000
+          batchChangeInterval: 1s
+          evaluateTargetHealth: true
+          preferCNAME: false
+          zoneTags: []
+        
+        domainFilters:
+          - example.com  # Update with your domain
+        
+        policy: upsert-only
+        
+        registry: txt
+        txtOwnerId: "production-cluster"  # Update with your cluster name
+        txtPrefix: "external-dns-"
+        
+        interval: 1m
+        triggerLoopOnEvent: false
+        
+        logLevel: info
+        logFormat: text
+        
+        metrics:
+          enabled: true
+          port: 7979
+          serviceMonitor:
+            enabled: true
+            namespace: external-dns
+            interval: 30s
+            path: /metrics
+        
+        rbac:
+          create: true
+        
+        serviceAccount:
+          create: true
+          name: external-dns
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::YOUR_ACCOUNT:role/AmazonEKSExternalDNSRole
+        
+        resources:
+          limits:
+            cpu: 50m
+            memory: 50Mi
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        
+        nodeSelector:
+          kubernetes.io/arch: amd64
+        
+        tolerations:
+          - key: CriticalAddonsOnly
+            operator: Exists
+        
+        affinity: {}
+        
+        podDisruptionBudget:
+          enabled: false
+        
+        extraArgs:
+          - --aws-batch-change-size=1000
+          - --aws-batch-change-interval=1s
+          - --aws-evaluate-target-health=true
+          - --aws-prefer-cname=false
+          - --aws-zones-cache-duration=3h
+          - --events
+          - --log-level=info
+          - --log-format=text
+          - --metrics-address=0.0.0.0:7979
+          - --txt-cache-interval=0s
+          - --txt-wildcard-replacement=wildcard
+        
+        env:
+          - name: AWS_DEFAULT_REGION
+            value: ap-southeast-2
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+              - ALL
+        
+        podSecurityContext:
+          fsGroup: 65534
+          runAsGroup: 65534
+          runAsNonRoot: true
+          runAsUser: 65534
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m 

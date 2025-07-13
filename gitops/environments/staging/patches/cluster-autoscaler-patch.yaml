@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-autoscaler
+spec:
+  source:
+    helm:
+      values: |
+        # Staging environment - production-like but faster scaling
+        autoDiscovery:
+          clusterName: staging-cluster
+        
+        replicaCount: 1  # Single replica for staging
+        
+        extraArgs:
+          logtostderr: true
+          stderrthreshold: info
+          v: 2
+          skip-nodes-with-local-storage: false
+          expander: least-waste
+          node-group-auto-discovery: asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/staging-cluster
+          balance-similar-node-groups: false
+          skip-nodes-with-system-pods: false
+          scale-down-enabled: true
+          scale-down-delay-after-add: 5m  # Moderate scaling for staging
+          scale-down-delay-after-delete: 10s
+          scale-down-delay-after-failure: 2m
+          scale-down-unneeded-time: 8m
+          scale-down-utilization-threshold: 0.4
+          max-node-provision-time: 12m 

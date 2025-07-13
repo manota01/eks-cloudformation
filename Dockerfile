@@ -44,9 +44,13 @@ WORKDIR /eks-cluster
 # Copy cluster configuration files
 COPY cluster-config/ ./cluster-config/
 COPY scripts/ ./scripts/
+COPY gitops/ ./gitops/
 
 # Make scripts executable
-RUN chmod +x scripts/*.sh
+RUN chmod +x scripts/*.sh gitops/bootstrap.sh
+
+# Create kustomize symlinks for easier access
+RUN ln -sf /usr/local/bin/kustomize /usr/local/bin/kustomize
 
 # Set default shell
 SHELL ["/bin/bash", "-c"]

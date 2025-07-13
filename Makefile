@@ -1,7 +1,7 @@
 # EKS Cluster Management Makefile
 # Production-grade EKS cluster using eksctl in Docker
 
-.PHONY: help build shell create-cluster delete-cluster install-addons scale-cluster clean
+.PHONY: help build shell create-cluster delete-cluster scale-cluster clean
 
 # Default environment
 ENVIRONMENT ?= production
@@ -44,9 +44,7 @@ validate-cluster: ## Validate cluster configuration
 		"eksctl create cluster --config-file=cluster-config/$(ENVIRONMENT)-cluster.yaml --dry-run"
 
 ##@ Cluster Management
-install-addons: ## Install essential add-ons
-	@echo -e "$(GREEN)Installing add-ons...$(NC)"
-	bash scripts/run-docker.sh --environment $(ENVIRONMENT) install-addons
+
 
 scale-cluster: ## Scale cluster nodes
 	@echo -e "$(YELLOW)Scaling cluster...$(NC)"
@@ -108,6 +106,72 @@ clean: ## Clean up Docker images and containers
 docs: ## Generate documentation
 	@echo -e "$(GREEN)Generating documentation...$(NC)"
 	@echo "Documentation available in README.md"
+
+##@ GitOps with ArgoCD
+gitops-bootstrap: ## Bootstrap ArgoCD and deploy applications for current environment
+	@echo -e "$(GREEN)Bootstrapping ArgoCD and applications for $(ENVIRONMENT)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"cd gitops && ./bootstrap.sh --environment $(ENVIRONMENT)"
+
+gitops-bootstrap-ui: ## Bootstrap ArgoCD with UI port-forward for current environment
+	@echo -e "$(GREEN)Bootstrapping ArgoCD with UI access for $(ENVIRONMENT)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"cd gitops && ./bootstrap.sh --environment $(ENVIRONMENT) --port-forward"
+
+gitops-update-configs: ## Update GitOps application configurations for current environment
+	@echo -e "$(YELLOW)Updating GitOps configurations for $(ENVIRONMENT)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"cd gitops && ./bootstrap.sh --environment $(ENVIRONMENT) --update-configs"
+
+##@ Multi-Environment GitOps
+gitops-bootstrap-dev: ## Bootstrap ArgoCD and applications for dev environment
+	@$(MAKE) gitops-bootstrap ENVIRONMENT=dev
+
+gitops-bootstrap-staging: ## Bootstrap ArgoCD and applications for staging environment
+	@$(MAKE) gitops-bootstrap ENVIRONMENT=staging
+
+gitops-bootstrap-prod: ## Bootstrap ArgoCD and applications for production environment
+	@$(MAKE) gitops-bootstrap ENVIRONMENT=production
+
+gitops-status-dev: ## Check GitOps applications status for dev environment
+	@$(MAKE) gitops-status ENVIRONMENT=dev
+
+gitops-status-staging: ## Check GitOps applications status for staging environment
+	@$(MAKE) gitops-status ENVIRONMENT=staging
+
+gitops-status-prod: ## Check GitOps applications status for production environment
+	@$(MAKE) gitops-status ENVIRONMENT=production
+
+##@ ArgoCD Management
+argocd-ui: ## Access ArgoCD UI (port-forward)
+	@echo -e "$(GREEN)Starting ArgoCD UI port-forward...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl port-forward svc/argocd-server -n argocd 8080:443"
+
+argocd-password: ## Get ArgoCD admin password
+	@echo -e "$(YELLOW)Getting ArgoCD admin password...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d && echo"
+
+argocd-apps: ## List ArgoCD applications
+	@echo -e "$(YELLOW)Listing ArgoCD applications...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl get applications -n argocd"
+
+argocd-sync: ## Sync all ArgoCD applications
+	@echo -e "$(GREEN)Syncing all ArgoCD applications...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl patch applications -n argocd --type merge -p '{\"spec\":{\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true}}}}' --all"
+
+argocd-logs: ## View ArgoCD application controller logs
+	@echo -e "$(YELLOW)Viewing ArgoCD logs...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl logs -n argocd deployment/argocd-application-controller -f"
+
+gitops-status: ## Check GitOps applications status
+	@echo -e "$(YELLOW)Checking GitOps applications status for $(ENVIRONMENT)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		"kubectl get applications -n argocd && echo '---' && kubectl get pods -A | grep -E '(argocd|kube-system|monitoring|ingress-nginx|external-dns|cert-manager)'"
 
 ##@ Examples
 example-app: ## Deploy example application

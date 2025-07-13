@@ -1,0 +1,75 @@
+# ArgoCD Installation
+# This installs ArgoCD using the official stable release
+# Run: kubectl apply -f gitops/argocd/namespace.yaml
+# Run: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# Run: kubectl apply -f gitops/argocd/install.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Enable server-side diff calculations
+  server.disable.auth: "false"
+  # Allow applications to be created in any namespace
+  application.namespaces: "*"
+  # Enable gRPC-Web to work with AWS ALB
+  server.grpc.web: "true"
+  # Increase timeout for large syncs
+  controller.operation.processors: "20"
+  controller.status.processors: "20"
+  controller.repo.server.timeout.seconds: "300"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-server-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-server-config
+    app.kubernetes.io/part-of: argocd
+data:
+  # Configure ArgoCD server
+  url: "https://argocd.example.com"  # Update this with your actual domain
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  # Enable exec into pods
+  exec.enabled: "true"
+  # Configure RBAC
+  policy.default: role:readonly
+  policy.csv: |
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    g, argocd-admins, role:admin
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-2:YOUR_ACCOUNT:certificate/YOUR_CERT_ID
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+spec:
+  rules:
+  - host: argocd.example.com  # Update this with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 443 

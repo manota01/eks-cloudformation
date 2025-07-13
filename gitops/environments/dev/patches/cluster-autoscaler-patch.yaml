@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-autoscaler
+spec:
+  source:
+    helm:
+      values: |
+        # Dev environment - faster scaling for development
+        autoDiscovery:
+          clusterName: dev-cluster
+        
+        replicaCount: 1  # Single replica for dev
+        
+        extraArgs:
+          logtostderr: true
+          stderrthreshold: info
+          v: 2  # Less verbose logging
+          skip-nodes-with-local-storage: false
+          expander: least-waste
+          node-group-auto-discovery: asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/dev-cluster
+          balance-similar-node-groups: false
+          skip-nodes-with-system-pods: false
+          scale-down-enabled: true
+          scale-down-delay-after-add: 2m  # Faster scale down for dev
+          scale-down-delay-after-delete: 10s
+          scale-down-delay-after-failure: 1m  # Faster retry for dev
+          scale-down-unneeded-time: 5m  # Faster scale down for cost savings
+          scale-down-utilization-threshold: 0.3  # More aggressive scaling
+          max-node-provision-time: 10m  # Faster timeout for dev
+        
+        resources:
+          limits:
+            cpu: 50m
+            memory: 150Mi
+          requests:
+            cpu: 25m
+            memory: 100Mi 

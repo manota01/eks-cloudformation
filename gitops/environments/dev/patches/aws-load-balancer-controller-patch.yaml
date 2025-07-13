@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-load-balancer-controller
+spec:
+  source:
+    helm:
+      values: |
+        # Dev environment configuration
+        clusterName: dev-cluster
+        
+        replicaCount: 1  # Single replica for dev
+        
+        resources:
+          limits:
+            cpu: 100m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        
+        # Disable anti-affinity for dev (single replica)
+        affinity: {}
+        
+        # Less strict resource requirements for dev
+        podDisruptionBudget:
+          enabled: false 

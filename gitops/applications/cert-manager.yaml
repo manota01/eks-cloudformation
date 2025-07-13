@@ -1,0 +1,187 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/component: certificates
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.13.3
+    helm:
+      releaseName: cert-manager
+      values: |
+        installCRDs: true
+        
+        global:
+          rbac:
+            create: true
+          
+          podSecurityPolicy:
+            enabled: false
+            useAppArmor: false
+          
+          logLevel: 2
+        
+        image:
+          repository: quay.io/jetstack/cert-manager-controller
+          tag: v1.13.3
+        
+        webhook:
+          image:
+            repository: quay.io/jetstack/cert-manager-webhook
+            tag: v1.13.3
+          
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          
+          tolerations:
+            - key: CriticalAddonsOnly
+              operator: Exists
+        
+        cainjector:
+          image:
+            repository: quay.io/jetstack/cert-manager-cainjector
+            tag: v1.13.3
+          
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          
+          tolerations:
+            - key: CriticalAddonsOnly
+              operator: Exists
+        
+        startupapicheck:
+          image:
+            repository: quay.io/jetstack/cert-manager-ctl
+            tag: v1.13.3
+          
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          
+          tolerations:
+            - key: CriticalAddonsOnly
+              operator: Exists
+        
+        serviceAccount:
+          create: true
+          name: cert-manager
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::YOUR_ACCOUNT:role/AmazonEKSCertManagerRole
+        
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        
+        nodeSelector:
+          kubernetes.io/arch: amd64
+        
+        tolerations:
+          - key: CriticalAddonsOnly
+            operator: Exists
+        
+        affinity: {}
+        
+        podDisruptionBudget:
+          enabled: true
+          minAvailable: 1
+        
+        prometheus:
+          enabled: true
+          servicemonitor:
+            enabled: true
+            namespace: cert-manager
+            prometheusInstance: default
+            targetPort: 9402
+            path: /metrics
+            interval: 60s
+            scrapeTimeout: 30s
+            labels: {}
+        
+        extraArgs:
+          - --feature-gates=ExperimentalGatewayAPISupport=true
+          - --dns01-recursive-nameservers=8.8.8.8:53,1.1.1.1:53
+          - --dns01-recursive-nameservers-only
+          - --enable-certificate-owner-ref=true
+          - --max-concurrent-challenges=60
+        
+        extraEnv:
+          - name: AWS_DEFAULT_REGION
+            value: ap-southeast-2
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+              - ALL
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - Replace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+    jsonPointers:
+    - /spec/conversion/webhook/clientConfig/caBundle 

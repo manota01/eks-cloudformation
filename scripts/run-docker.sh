@@ -30,7 +30,7 @@ usage() {
     echo "  bash                      Start interactive bash shell (default)"
     echo "  create-cluster            Create EKS cluster"
     echo "  delete-cluster            Delete EKS cluster"
-    echo "  install-addons            Install cluster add-ons"
+    echo ""
     echo "  scale-cluster             Scale cluster nodes"
     echo "  <custom-command>          Run custom command in container"
     echo ""
@@ -115,9 +115,7 @@ case "$COMMAND" in
     "delete-cluster")
         COMMAND="bash scripts/delete-cluster.sh --environment $ENVIRONMENT"
         ;;
-    "install-addons")
-        COMMAND="bash scripts/install-addons.sh --environment $ENVIRONMENT"
-        ;;
+
     "scale-cluster")
         COMMAND="bash scripts/scale-cluster.sh --environment $ENVIRONMENT"
         ;;

@@ -6,6 +6,7 @@ set -e  # Exit on any error
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values
@@ -140,9 +141,9 @@ kubectl get nodes
 echo -e "${YELLOW}Updating kubeconfig...${NC}"
 aws eks update-kubeconfig --name="$CLUSTER_NAME" --region="$AWS_REGION"
 
-# Install essential add-ons
-echo -e "${GREEN}Installing essential add-ons...${NC}"
-bash scripts/install-addons.sh --environment="$ENVIRONMENT" --cluster-name="$CLUSTER_NAME"
+# Note: Add-ons are managed through GitOps
+echo -e "${BLUE}Cluster created. Install add-ons using GitOps:${NC}"
+echo -e "  make gitops-bootstrap-${ENVIRONMENT}"
 
 echo -e "${GREEN}Cluster $CLUSTER_NAME created successfully!${NC}"
 echo ""
