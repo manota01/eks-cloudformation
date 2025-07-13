@@ -1,0 +1,86 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: dev-eks
+  region: ap-southeast-2
+  version: "1.28"
+  tags:
+    Environment: development
+    Team: platform
+    Project: eks-cloudformation
+    ManagedBy: eksctl
+
+# VPC Configuration - smaller CIDR for dev
+vpc:
+  cidr: "10.1.0.0/16"
+  nat:
+    gateway: Single # Single NAT Gateway for cost savings
+  clusterEndpoints:
+    privateAccess: true
+    publicAccess: true
+    publicAccessCIDRs: ["0.0.0.0/0"]
+  tags:
+    Name: dev-eks-vpc
+
+# IAM Configuration
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: cluster-autoscaler
+        namespace: kube-system
+      wellKnownPolicies:
+        autoScaler: true
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+
+# Managed Node Groups - minimal setup for dev
+managedNodeGroups:
+  # Single node group for dev
+  - name: dev-nodes
+    instanceType: t3.small
+    minSize: 1
+    maxSize: 3
+    desiredCapacity: 2
+    volumeSize: 20
+    volumeType: gp3
+    amiFamily: AmazonLinux2
+    labels:
+      node-type: dev
+      workload: general
+    tags:
+      Name: dev-nodes
+      NodeGroup: dev
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+    securityGroups:
+      withShared: true
+      withLocal: true
+    ssh:
+      enableSsm: true
+
+# Add-ons - minimal for dev
+addons:
+  - name: vpc-cni
+    version: latest
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+  - name: aws-ebs-csi-driver
+    version: latest
+    wellKnownPolicies:
+      ebsCSIController: true
+
+# CloudWatch Logging - basic for dev
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit"]
+    logRetentionInDays: 7 

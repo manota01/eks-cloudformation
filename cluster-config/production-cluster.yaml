@@ -1,0 +1,176 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: production-eks
+  region: ap-southeast-2
+  version: "1.28"
+  tags:
+    Environment: production
+    Team: platform
+    Project: eks-cloudformation
+    ManagedBy: eksctl
+
+# VPC Configuration
+vpc:
+  cidr: "10.0.0.0/16"
+  nat:
+    gateway: HighlyAvailable # NAT Gateway in each AZ
+  clusterEndpoints:
+    privateAccess: true
+    publicAccess: true
+    publicAccessCIDRs: ["0.0.0.0/0"] # Restrict this to your IP ranges
+  tags:
+    Name: production-eks-vpc
+
+# IAM Configuration
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: cluster-autoscaler
+        namespace: kube-system
+      wellKnownPolicies:
+        autoScaler: true
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+    - metadata:
+        name: external-dns
+        namespace: kube-system
+      wellKnownPolicies:
+        externalDNS: true
+    - metadata:
+        name: cert-manager
+        namespace: cert-manager
+      wellKnownPolicies:
+        certManager: true
+
+# Managed Node Groups
+managedNodeGroups:
+  # System/Core workloads
+  - name: system-nodes
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 2
+    volumeSize: 50
+    volumeType: gp3
+    amiFamily: AmazonLinux2
+    labels:
+      node-type: system
+      workload: system
+    tags:
+      Name: system-nodes
+      NodeGroup: system
+    taints:
+      - key: node-type
+        value: system
+        effect: NoSchedule
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+    securityGroups:
+      withShared: true
+      withLocal: true
+    ssh:
+      enableSsm: true
+
+  # Application workloads
+  - name: application-nodes
+    instanceType: t3.large
+    minSize: 2
+    maxSize: 10
+    desiredCapacity: 3
+    volumeSize: 100
+    volumeType: gp3
+    amiFamily: AmazonLinux2
+    labels:
+      node-type: application
+      workload: application
+    tags:
+      Name: application-nodes
+      NodeGroup: application
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+    securityGroups:
+      withShared: true
+      withLocal: true
+    ssh:
+      enableSsm: true
+
+# Spot instances for cost optimization
+  - name: spot-nodes
+    instanceTypes: ["t3.large", "t3.xlarge", "m5.large", "m5.xlarge"]
+    spot: true
+    minSize: 0
+    maxSize: 20
+    desiredCapacity: 2
+    volumeSize: 100
+    volumeType: gp3
+    amiFamily: AmazonLinux2
+    labels:
+      node-type: spot
+      workload: batch
+    tags:
+      Name: spot-nodes
+      NodeGroup: spot
+    taints:
+      - key: spot-instance
+        value: "true"
+        effect: NoSchedule
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+    securityGroups:
+      withShared: true
+      withLocal: true
+    ssh:
+      enableSsm: true
+
+# Add-ons
+addons:
+  - name: vpc-cni
+    version: latest
+    configurationValues: |-
+      enableNetworkPolicy: "true"
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+  - name: aws-ebs-csi-driver
+    version: latest
+    wellKnownPolicies:
+      ebsCSIController: true
+
+# CloudWatch Logging
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator", "controllerManager", "scheduler", "api"]
+    logRetentionInDays: 30
+
+# Security Configuration
+secretsEncryption:
+  keyARN: # Will be created automatically if not specified
+
+# Fargate Profiles for serverless workloads
+fargateProfiles:
+  - name: serverless-workloads
+    selectors:
+      - namespace: fargate
+        labels:
+          compute-type: serverless
+    tags:
+      Name: serverless-workloads
+      Profile: fargate 
