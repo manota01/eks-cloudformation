@@ -370,6 +370,65 @@ Edit `cluster-config/production-cluster.yaml` for:
 - **Permissions**: Ensure your AWS user has sufficient EKS permissions
 - **Regions**: Default is ap-southeast-2, adjust as needed
 
+## 🔄 Cluster Update Strategies
+
+### Update Commands
+
+```bash
+# Complete cluster update
+make update-cluster                    # Update everything
+make update-cluster-dry-run           # Preview changes
+
+# Specific updates
+make update-k8s-version VERSION=1.29  # Kubernetes version
+make update-nodegroups                # Node groups (AMI, scaling)
+make update-addons                    # EKS addons (VPC CNI, CoreDNS, etc.)
+
+# Validation
+make validate-pre-update              # Before updates
+make validate-post-update             # After updates
+make validate-health                  # Quick health check
+```
+
+### Safe Update Workflow
+
+1. **Validate** → 2. **Update** → 3. **Validate** → 4. **Monitor**
+
+```bash
+# Example: Kubernetes version update
+make validate-pre-update
+make update-k8s-version VERSION=1.29
+make validate-post-update
+make gitops-status
+```
+
+### Environment Strategies
+
+| Environment | Update Speed | Validation | Risk Tolerance |
+|-------------|--------------|------------|----------------|
+| **Dev** | Fast | Basic | High |
+| **Staging** | Moderate | Comprehensive | Medium |
+| **Production** | Conservative | Strict | Zero |
+
+### Backup & Rollback
+
+- **Automatic backups** created before updates in `backups/` directory
+- **Rollback validation**: `./scripts/validate-cluster.sh --rollback --backup-dir <backup>`
+- **Manual rollback** using backup files for complex scenarios
+
+### Troubleshooting
+
+```bash
+# Check update status
+eksctl get nodegroup --cluster=<cluster-name>
+kubectl get nodes
+kubectl get applications -n argocd
+
+# Common fixes
+kubectl describe pod <pod-name>     # Pod issues
+aws eks describe-addon --cluster-name=<cluster> --addon-name=vpc-cni  # Addon issues
+```
+
 ## 🔧 Customization
 
 ### Adding New Environments

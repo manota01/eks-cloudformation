@@ -65,6 +65,54 @@ pods: ## List all pods
 	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
 		"kubectl get pods --all-namespaces"
 
+##@ Cluster Updates
+update-cluster: ## Update cluster (all components)
+	@echo -e "$(YELLOW)Updating cluster $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) update-cluster
+
+update-cluster-dry-run: ## Dry run cluster update (show what would be updated)
+	@echo -e "$(YELLOW)Dry run cluster update for $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) update-cluster --dry-run
+
+update-k8s-version: ## Update Kubernetes version
+	@echo -e "$(YELLOW)Updating Kubernetes version for $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		update-cluster --update-type k8s-version $(if $(VERSION),--target-version $(VERSION))
+
+update-nodegroups: ## Update node groups (AMI, configurations)
+	@echo -e "$(YELLOW)Updating node groups for $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		update-cluster --update-type nodegroups
+
+update-addons: ## Update EKS addons
+	@echo -e "$(YELLOW)Updating EKS addons for $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		update-cluster --update-type addons
+
+update-cluster-config: ## Update cluster configuration from file
+	@echo -e "$(YELLOW)Updating cluster configuration for $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		update-cluster --update-type config
+
+validate-cluster: ## Validate cluster health and readiness
+	@echo -e "$(YELLOW)Validating cluster $(CLUSTER_NAME)...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) validate-cluster
+
+validate-pre-update: ## Validate cluster readiness for updates
+	@echo -e "$(YELLOW)Validating cluster $(CLUSTER_NAME) for updates...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		validate-cluster --validation-type pre-update
+
+validate-post-update: ## Validate cluster after updates
+	@echo -e "$(YELLOW)Validating cluster $(CLUSTER_NAME) after updates...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		validate-cluster --validation-type post-update
+
+validate-health: ## Basic cluster health check
+	@echo -e "$(YELLOW)Checking cluster $(CLUSTER_NAME) health...$(NC)"
+	bash scripts/run-docker.sh --environment $(ENVIRONMENT) \
+		validate-cluster --validation-type health
+
 ##@ Development
 create-dev: ## Create development cluster
 	@$(MAKE) create-cluster ENVIRONMENT=dev
